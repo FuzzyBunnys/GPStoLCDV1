@@ -2,6 +2,8 @@
 #include <Adafruit_TFTLCD.h> // Hardware-specific library
 #include <SoftwareSerial.h>
 #include <TinyGPS.h>
+#include <Wire.h>
+#include <math.h>
 // The control pins for the LCD can be assigned to any digital or
 // analog pins...but we'll use the analog pins as this allows us to
 // double up the pins with the touch screen (see the TFT paint example).
@@ -38,7 +40,7 @@
 TinyGPS gps; // initialize our gps object here
 #define GPSRXPIN 10
 #define GPSTXPIN 11 //define the gps rx and tx pins
-SoftwareSerial GPSserial (GPSRXPIN, GPSTXPIN);
+SoftwareSerial GPSserial(GPSTXPIN, GPSRXPIN);
 
 
 
@@ -68,7 +70,7 @@ void setup (void){
  GPSserial.begin(9600); // initialize GPS serial 
 }
 
-void loop(void){
+void loop(){
   bool newdata = false;
   unsigned long start = millis();
   
@@ -76,10 +78,20 @@ void loop(void){
   while (millis() - start < 1000)
   {
     if (feedgps())
-      newdata = true;
+      newdata = true;   
   }
   
-  gpsdump(gps); 
+  if (newdata)
+  {
+    Serial.println("Acquired Data");
+    Serial.println("-------------");
+    gpsdump(gps);
+    Serial.println("-------------");
+    Serial.println();
+  }
+  else {
+    Serial.println("No data");
+  } 
 }
 
 
@@ -122,19 +134,100 @@ static void gpsdump(TinyGPS &gps)
   tft.setCursor(0,0);
   
   float fDist = totalDistance; // in meters
- 
- 
+ float fspeed = gps.f_speed_kmph();
   //float fSpeed = gps.f_speed_kmph();
-  tft.print(fDist);
+  printLCDFloat (fDist, 2);  
   tft.print(" Metres ");
-  if (gps.f_speed_mps()<0){
-    tft.print ("0.00");
-  }else{
-    tft.print(gps.f_speed_mps());
-  }
-  tft.print(" M/s");
+  printLCDFloat (fspeed, 2);
+  tft.print(" km/h");
 }
 
+static void print_int(unsigned long val, unsigned long invalid, int len)
+{
+  char sz[32];
+  if (val == invalid)
+    strcpy(sz, "*******");
+  else
+    sprintf(sz, "%ld", val);
+  sz[len] = 0;
+  for (int i=strlen(sz); i<len; ++i)
+    sz[i] = ' ';
+  if (len > 0) 
+    sz[len-1] = ' ';
+  Serial.print(sz);
+  feedgps();
+}
+
+static void print_float(float val, float invalid, int len, int prec)
+{
+  char sz[32];
+  if (val == invalid)
+  {
+    strcpy(sz, "*******");
+    sz[len] = 0;
+        if (len > 0) 
+          sz[len-1] = ' ';
+    for (int i=7; i<len; ++i)
+        sz[i] = ' ';
+    Serial.print(sz);
+  }
+  else
+  {
+    Serial.print(val, prec);
+    int vi = abs((int)val);
+    int flen = prec + (val < 0.0 ? 2 : 1);
+    flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
+    for (int i=flen; i<len; ++i)
+      Serial.print(" ");
+  }
+  feedgps();
+}
+
+void printLCDFloat(double number, int digits)
+{
+  // Handle negative numbers
+  if (number < 0.0)
+  {
+     tft.print("-");
+     number = -number;
+  }
+
+  // Round correctly so that print(1.999, 2) prints as "2.00"
+  double rounding = 0.5;
+  for (uint8_t i=0; i<digits; ++i)
+    rounding /= 10.0;
+  
+  number += rounding;
+
+  // Extract the integer part of the number and print it
+  unsigned long int_part = (unsigned long)number;
+  double remainder = number - (double)int_part;
+  char sTemp[10];
+  ltoa(int_part, sTemp, 10);
+  tft.print(sTemp);
+
+  // Print the decimal point, but only if there are digits beyond
+  if (digits > 0)
+    tft.print("."); 
+
+  // Extract digits from the remainder one at a time
+  while (digits-- > 0)
+  {
+    remainder *= 10.0;
+    int toPrint = int(remainder);
+    ltoa(toPrint, sTemp, 10);
+   tft.print(sTemp);
+    remainder -= toPrint; 
+  } 
+}
+
+static void print_str(const char *str, int len)
+{
+  int slen = strlen(str);
+  for (int i=0; i<len; ++i)
+    Serial.print(i<slen ? str[i] : ' ');
+  feedgps();
+}
 
 static bool feedgps()
 {

@@ -140,6 +140,17 @@ static void gpsdump(TinyGPS &gps)
   tft.print(" Metres ");
   printLCDFloat (fspeed, 2);
   tft.print(" km/h");
+  delay (500);
+  tft.setCursor(0,0);
+  tft.setTextColor(BLACK); // so this clears the old data and lets us write new stuff
+  printLCDFloat (fDist, 2);// the values for metres and km/h are written over in black
+  tft.setTextColor(WHITE); // and km/h and metres stay in white
+  tft.print(" Metres "); // it sort of flashes the data which is annoying,
+  tft.setTextColor(BLACK);// i've increased the delay to half a second, but i'll haev to figure out a better way
+  printLCDFloat (fspeed, 2);
+  tft.setTextColor(WHITE);
+  tft.print(" km/h");
+  
 }
 
 static void print_int(unsigned long val, unsigned long invalid, int len)
